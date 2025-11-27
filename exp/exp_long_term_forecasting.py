@@ -22,6 +22,32 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
 
+        # 如果提供了预训练模型路径，加载预训练权重
+        if hasattr(self.args, 'pretrained_model_path') and self.args.pretrained_model_path:
+            if os.path.exists(self.args.pretrained_model_path):
+                print(f'Loading pretrained model from {self.args.pretrained_model_path}')
+                checkpoint = torch.load(self.args.pretrained_model_path, map_location='cpu')
+                
+                # 加载权重（忽略不匹配的层，如任务特定的头）
+                model_dict = model.state_dict()
+                pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict and model_dict[k].shape == v.shape}
+                
+                # 打印加载的层信息
+                print(f'Loaded {len(pretrained_dict)}/{len(model_dict)} layers from pretrained model')
+                skipped_keys = [k for k in checkpoint.keys() if k not in pretrained_dict]
+                if skipped_keys:
+                    print(f'Skipped layers (shape mismatch or not in model): {skipped_keys[:10]}...')
+                
+                model_dict.update(pretrained_dict)
+                model.load_state_dict(model_dict)
+                print('Pretrained model loaded successfully!')
+                
+                # 冻结编码器,只微调任务头
+                if hasattr(model, 'freeze_encoder'):
+                    model.freeze_encoder()
+            else:
+                print(f'Warning: Pretrained model path {self.args.pretrained_model_path} does not exist. Training from scratch.')
+
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
@@ -173,7 +199,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         preds = []
         trues = []
-        folder_path = './test_results/' + setting + '/'
+        folder_path = './results/' + setting + '/imgs/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -254,10 +280,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         mae, mse, rmse, mape, mspe = metric(preds, trues)
         print('mse:{}, mae:{}, dtw:{}'.format(mse, mae, dtw))
-        f = open("result_long_term_forecast.txt", 'a')
+        f = open(self.args.logs_path, 'a')
         f.write(setting + "  \n")
         f.write('mse:{}, mae:{}, dtw:{}'.format(mse, mae, dtw))
-        f.write('\n')
         f.write('\n')
         f.close()
 

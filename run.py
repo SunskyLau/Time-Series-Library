@@ -7,6 +7,7 @@ from exp.exp_imputation import Exp_Imputation
 from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
 from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
+from exp.exp_pretrain import Exp_Pretrain # 1. 导入新的实验类
 from utils.print_args import print_args
 import random
 import numpy as np
@@ -26,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
+    parser.add_argument('--logs_path', type=str, required=True, default='./logs/default.txt', help='path of logging file')
 
     # data loader
     parser.add_argument('--data', type=str, required=True, default='ETTh1', help='dataset type')
@@ -50,6 +52,20 @@ if __name__ == '__main__':
 
     # anomaly detection task
     parser.add_argument('--anomaly_ratio', type=float, default=0.25, help='prior anomaly ratio (%%)')
+
+    # classification task
+    parser.add_argument('--num_class', type=int, default=0, help='number of classes')
+
+    # pretrain task for TFAME
+    parser.add_argument('--mask_ratio', type=float, default=0.4, help='mask ratio for pretraining')
+    parser.add_argument('--lambda_t', type=float, default=1.0, help='weight for time domain loss')
+    parser.add_argument('--lambda_f', type=float, default=1.0, help='weight for frequency domain loss')
+    parser.add_argument('--stride', type=int, default=16, help='stride size for patching in TFAME')
+    parser.add_argument('--padding', type=int, default=16, help='padding size for patching in TFAME')
+    
+    # pretrained model loading
+    parser.add_argument('--pretrained_model_path', type=str, default='', help='path to pretrained model checkpoint')
+
 
     # model define
     parser.add_argument('--expand', type=int, default=2, help='expansion factor for Mamba')
@@ -186,14 +202,14 @@ if __name__ == '__main__':
         Exp = Exp_Anomaly_Detection
     elif args.task_name == 'classification':
         Exp = Exp_Classification
-    else:
-        Exp = Exp_Long_Term_Forecast
-
+    elif args.task_name == 'pretrain': # <--- 添加这一分支
+        Exp = Exp_Pretrain
+    
     if args.is_training:
         for ii in range(args.itr):
             # setting record of experiments
             exp = Exp(args)  # set experiments
-            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
+            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_lt{}_lf{}_{}_{}'.format(
                 args.task_name,
                 args.model_id,
                 args.model,
@@ -212,6 +228,8 @@ if __name__ == '__main__':
                 args.factor,
                 args.embed,
                 args.distil,
+                args.lambda_t,
+                args.lambda_f,
                 args.des, ii)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
@@ -226,7 +244,7 @@ if __name__ == '__main__':
     else:
         exp = Exp(args)  # set experiments
         ii = 0
-        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
+        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_lt{}_lf{}_{}_{}'.format(
             args.task_name,
             args.model_id,
             args.model,
@@ -245,6 +263,8 @@ if __name__ == '__main__':
             args.factor,
             args.embed,
             args.distil,
+            args.lambda_t,
+            args.lambda_f,
             args.des, ii)
 
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
